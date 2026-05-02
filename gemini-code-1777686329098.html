@@ -1,0 +1,1528 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fluxo de Obra — NN Soluções</title>
+
+<!-- FIREBASE SDK (Versão Compatível para HTML) -->
+<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: { extend: { colors: { primary: { 50:'#f0fdf4',100:'#dcfce7',200:'#bbf7d0',300:'#86efac',400:'#4ade80',500:'#22c55e',600:'#16a34a',700:'#15803d',800:'#166534',900:'#0d5c46' } } } }
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{font-family:'Inter',sans-serif;box-sizing:border-box;}
+html,body{height:100%;margin:0;overflow:hidden;background:#f1f5f9;}
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:#f1f5f9;}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px;}
+.page{display:none;}.page.active{display:block;}
+.tab-btn.active{border-bottom:2px solid #0d5c46;color:#0d5c46;font-weight:600;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:8px;cursor:pointer;color:#94a3b8;font-size:14px;font-weight:500;transition:all .15s;margin-bottom:2px;}
+.nav-item:hover{background:rgba(255,255,255,.08);color:#fff;}
+.nav-item.active{background:#0d5c46;color:#fff;}
+.badge{display:inline-flex;align-items:center;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600;}
+.progress-bar{height:6px;border-radius:3px;background:#e2e8f0;overflow:hidden;}
+.progress-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#16a34a,#0d5c46);transition:width .3s;}
+.kpi-card{background:#fff;border-radius:12px;padding:20px;border:1px solid #f1f5f9;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.btn-primary{background:#0d5c46;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:600;cursor:pointer;transition:background .15s;display:inline-flex;align-items:center;gap:6px;}
+.btn-primary:hover{background:#15803d;}
+.btn-secondary{background:#f1f5f9;color:#475569;border:none;border-radius:8px;padding:8px 16px;font-size:14px;font-weight:500;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
+.btn-secondary:hover{background:#e2e8f0;}
+.btn-danger{background:#fee2e2;color:#dc2626;border:none;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;}
+.btn-danger:hover{background:#fecaca;}
+.form-input{width:100%;border:1px solid #e2e8f0;border-radius:8px;padding:9px 12px;font-size:14px;color:#1e293b;outline:none;transition:border .15s;}
+.form-input:focus{border-color:#0d5c46;box-shadow:0 0 0 3px rgba(13,92,70,.1);}
+.form-label{font-size:13px;font-weight:600;color:#374151;margin-bottom:5px;display:block;}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:none;align-items:center;justify-content:center;padding:16px;}
+.modal-overlay.active{display:flex;}
+.modal-box{background:#fff;border-radius:16px;width:100%;max-width:600px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);}
+.table-row:hover{background:#f8fafc;}
+.sidebar-mobile-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:40;display:none;}
+.sidebar-mobile-overlay.active{display:block;}
+@media(max-width:768px){
+  #sidebar{position:fixed;left:-280px;top:0;bottom:0;z-index:50;transition:left .25s;}
+  #sidebar.open{left:0;}
+  #mainArea{margin-left:0!important;}
+}
+.obra-card { background:#fff; border-radius:12px; border:1px solid #e2e8f0; padding:16px; transition: transform 0.1s, box-shadow 0.1s; cursor:pointer; }
+.obra-card:hover { transform:translateY(-2px); box-shadow:0 10px 15px -3px rgba(0,0,0,0.1); border-color:#0d5c46; }
+</style>
+</head>
+<body>
+
+<!-- LOADING INICIAL DA NUVEM -->
+<div id="cloudLoading" style="position:fixed;inset:0;background:#1e293b;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;">
+    <div style="width:50px;height:50px;border:4px solid rgba(255,255,255,0.1);border-top-color:#0d5c46;border-radius:50%;animation:spin 1s linear infinite;"></div>
+    <h2 style="margin-top:20px;font-size:18px;font-weight:600;">Sincronizando com a Nuvem...</h2>
+    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+</div>
+
+<!-- LOGIN -->
+<div id="loginPage" style="display:none;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);">
+  <div style="width:100%;max-width:400px;padding:16px;">
+    <div style="background:#fff;border-radius:20px;padding:40px;box-shadow:0 25px 60px rgba(0,0,0,.3);">
+      <div style="text-align:center;margin-bottom:32px;">
+        <div style="display:inline-flex;align-items:center;justify-content:center;width:60px;height:60px;background:#0d5c46;border-radius:16px;margin-bottom:16px;">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </div>
+        <h1 style="font-size:24px;font-weight:700;color:#1e293b;margin:0 0 4px;">NN Soluções</h1>
+        <p style="color:#64748b;font-size:14px;margin:0;">Fluxo de Obra Integrado</p>
+      </div>
+      <div id="loginError" style="display:none;background:#fee2e2;border:1px solid #fca5a5;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;"></div>
+      <div style="margin-bottom:16px;">
+        <label class="form-label">E-mail</label>
+        <input id="loginEmail" type="email" class="form-input" placeholder="seu@email.com" value="admin@nn.com">
+      </div>
+      <div style="margin-bottom:24px;">
+        <label class="form-label">Senha</label>
+        <input id="loginPassword" type="password" class="form-input" placeholder="••••••" value="123456">
+      </div>
+      <button class="btn-primary" style="width:100%;justify-content:center;padding:12px;" onclick="doLogin()">Acessar Sistema</button>
+    </div>
+  </div>
+</div>
+
+<!-- APP SHELL (Sidebar e Header iguais aos anteriores, mantidos para economizar espaço visual) -->
+<div id="appShell" style="display:none;height:100vh;">
+  <div style="display:grid;grid-template-columns:260px 1fr;grid-template-rows:1fr;height:100vh;">
+    <!-- SIDEBAR -->
+    <div id="sidebar" style="background:#1e293b;display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;">
+      <div style="padding:20px 16px 16px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:28px;">
+          <div style="width:36px;height:36px;background:#0d5c46;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          </div>
+          <div>
+            <div style="font-weight:700;color:#fff;font-size:15px;">Fluxo de Obra</div>
+            <div style="font-size:11px;color:#94a3b8;">NN Soluções Integradas</div>
+          </div>
+        </div>
+        <div style="font-size:11px;font-weight:600;color:#475569;letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px;padding-left:4px;">Menu Tático</div>
+        <nav id="sidebarNav">
+          <div class="nav-item active" onclick="navigate('dashboard')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            Dashboard
+          </div>
+          <div class="nav-item" onclick="navigate('obras')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            Controle de Obras
+          </div>
+          <div class="nav-item" onclick="navigate('calendario')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Calendário
+          </div>
+          <div class="nav-item" onclick="navigate('financeiro')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            Financeiro
+          </div>
+          <div class="nav-item" onclick="navigate('diario')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            Diário de Obra
+          </div>
+          <div class="nav-item" onclick="navigate('configuracoes')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Configurações
+          </div>
+        </nav>
+      </div>
+      <div style="margin-top:auto;padding:16px;border-top:1px solid rgba(255,255,255,.06);">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div id="sidebarAvatar" style="width:34px;height:34px;background:#0d5c46;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:13px;flex-shrink:0;">N</div>
+          <div style="flex:1;min-width:0;">
+            <div id="sidebarName" style="font-size:13px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Neto Noronha</div>
+            <div style="font-size:11px;color:#64748b;">Gestor Cloud</div>
+          </div>
+          <button onclick="doLogout()" title="Sair" style="background:none;border:none;cursor:pointer;color:#475569;padding:4px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN AREA -->
+    <div id="mainArea" style="display:flex;flex-direction:column;overflow:hidden;background:#f8fafc;">
+      <!-- HEADER -->
+      <div style="background:#fff;border-bottom:1px solid #f1f5f9;padding:0 24px;height:60px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:sticky;top:0;z-index:10;">
+        <div style="display:flex;align-items:center;gap:12px;">
+            <button onclick="document.getElementById('sidebar').classList.add('open'); document.getElementById('sidebarOverlay').classList.add('active');" class="md:hidden" style="background:none;border:none;color:#1e293b;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </button>
+            <div id="pageTitle" style="font-size:16px;font-weight:700;color:#1e293b;">Dashboard</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <button class="btn-primary" id="headerActionBtn" onclick="openObraModal(null)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Nova Obra
+          </button>
+        </div>
+      </div>
+      <!-- CENTRAL DE ALERTAS (Injetada dinamicamente) -->
+      <div id="alertCenter" style="padding: 0 24px; margin-top:16px;"></div>
+      <!-- CONTENT -->
+      <div id="pageContent" style="flex:1;overflow-y:auto;overscroll-behavior:contain;padding:0 24px 24px 24px;">
+        <!-- pages rendered here -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- OVERLAY MOBILE -->
+<div id="sidebarOverlay" class="sidebar-mobile-overlay" onclick="closeMobileSidebar()"></div>
+
+<!-- MODAL: OBRA -->
+<div id="obraModal" class="modal-overlay">
+  <div class="modal-box">
+    <div style="padding:24px 24px 0;display:flex;align-items:center;justify-content:space-between;">
+      <h2 id="obraModalTitle" style="font-size:18px;font-weight:700;color:#1e293b;">Nova Obra</h2>
+      <button onclick="closeModal('obraModal')" style="background:none;border:none;cursor:pointer;color:#94a3b8;padding:4px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div style="padding:20px 24px 24px;">
+      <input type="hidden" id="obraId">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div style="grid-column:1/-1">
+          <label class="form-label">Nome da Obra *</label>
+          <input id="obraNome" class="form-input" type="text" placeholder="Ex: Casa 23 - Muquem">
+        </div>
+        <div>
+          <label class="form-label">Cliente / Contratante</label>
+          <input id="obraCliente" class="form-input" type="text" placeholder="Ex: João da Silva">
+        </div>
+        <div>
+          <label class="form-label">Nº do Contrato</label>
+          <input id="obraContrato" class="form-input" type="text" placeholder="Ex: CT-2026-001">
+        </div>
+        <div>
+          <label class="form-label">Tipo de Obra</label>
+          <select id="obraTipo" class="form-input">
+            <option value="Residencial">Residencial</option>
+            <option value="Comercial">Comercial</option>
+            <option value="Reforma">Reforma</option>
+            <option value="Infraestrutura">Infraestrutura</option>
+            <option value="Outro">Outro</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Localização</label>
+          <input id="obraLocal" class="form-input" type="text" placeholder="Ex: Quilombo Muquem, AL">
+        </div>
+        <div>
+          <label class="form-label">Responsável</label>
+          <input id="obraResponsavel" class="form-input" type="text" placeholder="Nome do gestor">
+        </div>
+        <div>
+          <label class="form-label">Status</label>
+          <select id="obraStatus" class="form-input">
+            <option value="planejamento">Planejamento</option>
+            <option value="em_andamento" selected>Em Andamento</option>
+            <option value="pausada">Pausada</option>
+            <option value="concluida">Concluída</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Data de Início</label>
+          <input id="obraDataInicio" class="form-input" type="date">
+        </div>
+        <div>
+          <label class="form-label">Previsão de Entrega</label>
+          <input id="obraDataPrevisao" class="form-input" type="date">
+        </div>
+        <div>
+          <label class="form-label">Valor Contratado (Orçamento)</label>
+          <input id="obraOrcamento" class="form-input" type="number" placeholder="0.00" min="0" step="0.01">
+        </div>
+        <div>
+          <label class="form-label">Valor Medido (Executado)</label>
+          <input id="obraValorMedido" class="form-input" type="number" placeholder="0.00" min="0" step="0.01">
+        </div>
+        <div style="grid-column:1/-1">
+          <label class="form-label">Progresso (%)</label>
+          <input id="obraProgresso" class="form-input" type="number" placeholder="0" min="0" max="100">
+        </div>
+        <div style="grid-column:1/-1">
+          <label class="form-label">Descrição / Observações</label>
+          <textarea id="obraDescricao" class="form-input" rows="2" placeholder="Informações adicionais..."></textarea>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+        <button class="btn-secondary" onclick="closeModal('obraModal')">Cancelar</button>
+        <button class="btn-primary" onclick="saveObra()">Salvar Operação</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: RECEBIVEL -->
+<div id="recebivelModal" class="modal-overlay">
+  <div class="modal-box">
+    <div style="padding:24px 24px 0;display:flex;align-items:center;justify-content:space-between;">
+      <h2 id="recebivelModalTitle" style="font-size:18px;font-weight:700;color:#1e293b;">Novo Recebível</h2>
+      <button onclick="closeModal('recebivelModal')" style="background:none;border:none;cursor:pointer;color:#94a3b8;padding:4px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div style="padding:20px 24px 24px;">
+      <input type="hidden" id="recebivelId">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div style="grid-column:1/-1">
+          <label class="form-label">Descrição *</label>
+          <input id="recebivelDescricao" class="form-input" type="text" placeholder="Ex: Medição #1">
+        </div>
+        <div>
+          <label class="form-label">Obra</label>
+          <select id="recebivelObra" class="form-input"></select>
+        </div>
+        <div>
+          <label class="form-label">Valor (R$) *</label>
+          <input id="recebivelValor" class="form-input" type="number" placeholder="0,00" min="0" step="0.01">
+        </div>
+        <div>
+          <label class="form-label">Data Prevista *</label>
+          <input id="recebivelData" class="form-input" type="date">
+        </div>
+        <div>
+          <label class="form-label">Status</label>
+          <select id="recebivelStatus" class="form-input">
+            <option value="pendente">Pendente</option>
+            <option value="recebido">Recebido</option>
+            <option value="vencido">Vencido</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+        <button class="btn-secondary" onclick="closeModal('recebivelModal')">Cancelar</button>
+        <button class="btn-primary" onclick="saveRecebivel()">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DIARIO -->
+<div id="diarioModal" class="modal-overlay">
+  <div class="modal-box">
+    <div style="padding:24px 24px 0;display:flex;align-items:center;justify-content:space-between;">
+      <h2 style="font-size:18px;font-weight:700;color:#1e293b;">Novo Registro no Diário</h2>
+      <button onclick="closeModal('diarioModal')" style="background:none;border:none;cursor:pointer;color:#94a3b8;padding:4px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div style="padding:20px 24px 24px;">
+      <input type="hidden" id="diarioId">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div>
+          <label class="form-label">Obra *</label>
+          <select id="diarioObra" class="form-input"></select>
+        </div>
+        <div>
+          <label class="form-label">Data *</label>
+          <input id="diarioData" class="form-input" type="date">
+        </div>
+        <div>
+          <label class="form-label">Hora Início</label>
+          <input id="diarioHoraInicio" class="form-input" type="time">
+        </div>
+        <div>
+          <label class="form-label">Hora Fim</label>
+          <input id="diarioHoraFim" class="form-input" type="time">
+        </div>
+        <div style="grid-column:1/-1">
+          <label class="form-label">Equipe Presente</label>
+          <input id="diarioEquipe" class="form-input" type="text" placeholder="Ex: João (Pedreiro), Marcos (Ajudante)">
+        </div>
+        <div>
+          <label class="form-label">Condição do Tempo</label>
+          <select id="diarioTempo" class="form-input">
+            <option value="ensolarado">☀️ Ensolarado</option>
+            <option value="nublado">☁️ Nublado</option>
+            <option value="chuvoso">🌧️ Chuvoso</option>
+            <option value="frio">❄️ Frio</option>
+            <option value="vento_forte">💨 Vento Forte</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Tipo de Serviço</label>
+          <select id="diarioTipoServico" class="form-input">
+            <option value="fundacao">Fundação</option>
+            <option value="alvenaria">Alvenaria</option>
+            <option value="estrutura">Estrutura</option>
+            <option value="cobertura">Cobertura</option>
+            <option value="instalacoes_eletricas">Instalações Elétricas</option>
+            <option value="instalacoes_hidraulicas">Instalações Hidráulicas</option>
+            <option value="revestimento">Revestimento</option>
+            <option value="pintura">Pintura</option>
+            <option value="acabamento">Acabamento</option>
+            <option value="demolicao">Demolição</option>
+            <option value="terraplenagem">Terraplenagem</option>
+            <option value="outros" selected>Outros</option>
+          </select>
+        </div>
+        <div style="grid-column:1/-1">
+          <label class="form-label">Serviços Executados *</label>
+          <textarea id="diarioServicos" class="form-input" rows="3" placeholder="Descriçao detalhada do que foi feito..."></textarea>
+        </div>
+        <div style="grid-column:1/-1">
+          <label class="form-label">Ocorrências / Problemas</label>
+          <textarea id="diarioOcorrencias" class="form-input" rows="2" placeholder="Ex: Falta de material, acidente, chuva forte parou a obra..."></textarea>
+        </div>
+        <div style="grid-column:1/-1">
+          <label class="form-label">Fotos do Dia</label>
+          <input id="diarioFotos" type="file" multiple accept="image/*" class="form-input">
+          <span style="font-size:11px;color:#94a3b8;">Formatos aceitos: JPG, PNG. (Máx 2MB recomendado)</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+        <button class="btn-secondary" onclick="closeModal('diarioModal')">Cancelar</button>
+        <button class="btn-primary" onclick="saveDiario()">Salvar Registro</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: CUSTO EXTRA -->
+<div id="custoModal" class="modal-overlay">
+  <div class="modal-box">
+    <div style="padding:24px 24px 0;display:flex;align-items:center;justify-content:space-between;">
+      <h2 style="font-size:18px;font-weight:700;color:#1e293b;">Novo Custo Extra</h2>
+      <button onclick="closeModal('custoModal')" style="background:none;border:none;cursor:pointer;color:#94a3b8;padding:4px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div style="padding:20px 24px 24px;">
+      <input type="hidden" id="custoId">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div style="grid-column:1/-1">
+          <label class="form-label">Descrição *</label>
+          <input id="custoDescricao" class="form-input" type="text" placeholder="Ex: Material extra, equipamento...">
+        </div>
+        <div>
+          <label class="form-label">Obra</label>
+          <select id="custoObra" class="form-input"></select>
+        </div>
+        <div>
+          <label class="form-label">Valor (R$) *</label>
+          <input id="custoValor" class="form-input" type="number" placeholder="0,00" min="0" step="0.01">
+        </div>
+        <div>
+          <label class="form-label">Data</label>
+          <input id="custoData" class="form-input" type="date">
+        </div>
+        <div>
+          <label class="form-label">Categoria</label>
+          <select id="custoCategoria" class="form-input">
+            <option value="material">Material</option>
+            <option value="mao_de_obra">Mão de Obra</option>
+            <option value="equipamento">Equipamento</option>
+            <option value="transporte">Transporte</option>
+            <option value="outros">Outros</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+        <button class="btn-secondary" onclick="closeModal('custoModal')">Cancelar</button>
+        <button class="btn-primary" onclick="saveCusto()">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ETAPA -->
+<div id="etapaModal" class="modal-overlay">
+  <div class="modal-box" style="max-width:420px;">
+    <div style="padding:24px 24px 0;display:flex;align-items:center;justify-content:space-between;">
+      <h2 style="font-size:18px;font-weight:700;color:#1e293b;">Nova Etapa</h2>
+      <button onclick="closeModal('etapaModal')" style="background:none;border:none;cursor:pointer;color:#94a3b8;padding:4px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div style="padding:20px 24px 24px;">
+      <input type="hidden" id="etapaId">
+      <input type="hidden" id="etapaObraId">
+      <div style="display:grid;gap:14px;">
+        <div>
+          <label class="form-label">Nome da Etapa *</label>
+          <input id="etapaNome" class="form-input" type="text" placeholder="Ex: Fundação, Estrutura, Acabamento...">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div>
+            <label class="form-label">Data Início</label>
+            <input id="etapaInicio" class="form-input" type="date">
+          </div>
+          <div>
+            <label class="form-label">Previsão Fim</label>
+            <input id="etapaFim" class="form-input" type="date">
+          </div>
+        </div>
+        <div>
+          <label class="form-label">Status</label>
+          <select id="etapaStatus" class="form-input">
+            <option value="pendente">Pendente</option>
+            <option value="em_andamento">Em Andamento</option>
+            <option value="concluida">Concluída</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Progresso (%)</label>
+          <input id="etapaProgresso" class="form-input" type="number" placeholder="0" min="0" max="100">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+        <button class="btn-secondary" onclick="closeModal('etapaModal')">Cancelar</button>
+        <button class="btn-primary" onclick="saveEtapa()">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DETALHE OBRA -->
+<div id="obraDetalheOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:90;display:none;overflow-y:auto;overscroll-behavior:contain;">
+  <div style="min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:20px;">
+    <div style="background:#f8fafc;border-radius:16px;width:100%;max-width:860px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+      <!-- Header detalhe -->
+      <div style="background:#1e293b;padding:20px 24px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <button onclick="closeObraDetalhe()" style="background:rgba(255,255,255,.1);border:none;cursor:pointer;color:#94a3b8;padding:4px 8px;border-radius:6px;font-size:12px;display:flex;align-items:center;gap:4px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                Voltar
+              </button>
+            </div>
+            <h2 id="detalheNome" style="font-size:20px;font-weight:700;color:#fff;margin:0 0 4px;">Obra</h2>
+            <div id="detalheLocal" style="font-size:13px;color:#94a3b8;display:flex;align-items:center;gap:4px;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              Local
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+            <div id="detalheStatusBadge"></div>
+            <button onclick="editObraFromDetalhe()" style="background:rgba(255,255,255,.1);border:none;cursor:pointer;color:#fff;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:500;">Editar</button>
+            <button onclick="closeObraDetalhe()" style="background:none;border:none;cursor:pointer;color:#94a3b8;padding:4px;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+        <!-- Progress -->
+        <div style="margin-top:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-size:12px;color:#94a3b8;">Avanço Físico Geral</span>
+            <span id="detalheProgresso" style="font-size:12px;font-weight:700;color:#22c55e;">0%</span>
+          </div>
+          <div class="progress-bar">
+            <div id="detalheProgressoBar" class="progress-fill" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+      <!-- Tabs -->
+      <div style="background:#fff;border-bottom:1px solid #f1f5f9;padding:0 24px;display:flex;gap:4px;overflow-x:auto;">
+        <button class="tab-btn active" onclick="setDetalheTab(this,'etapas')" style="padding:14px 16px;background:none;border:none;cursor:pointer;font-size:14px;color:#64748b;white-space:nowrap;">Etapas</button>
+        <button class="tab-btn" onclick="setDetalheTab(this,'diario')" style="padding:14px 16px;background:none;border:none;cursor:pointer;font-size:14px;color:#64748b;white-space:nowrap;">Diário</button>
+        <button class="tab-btn" onclick="setDetalheTab(this,'custos')" style="padding:14px 16px;background:none;border:none;cursor:pointer;font-size:14px;color:#64748b;white-space:nowrap;">Custos Extra</button>
+        <button class="tab-btn" onclick="setDetalheTab(this,'recebiveis')" style="padding:14px 16px;background:none;border:none;cursor:pointer;font-size:14px;color:#64748b;white-space:nowrap;">Recebíveis</button>
+      </div>
+      <!-- Tab content -->
+      <div id="detalheContent" style="padding:24px;min-height:300px;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== INTEGRAÇÃO FIREBASE =====
+const firebaseConfig = {
+  apiKey: "AIzaSyBhqQQOG31X7_mZf5dHDryfMi1W__HsaxY",
+  authDomain: "fluxo-de-obra-nn.firebaseapp.com",
+  projectId: "fluxo-de-obra-nn",
+  storageBucket: "fluxo-de-obra-nn.firebasestorage.app",
+  messagingSenderId: "181869875442",
+  appId: "1:181869875442:web:9697e5ae1249938079006b",
+  measurementId: "G-WPDR23H689"
+};
+
+// Inicializa o Firebase
+if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+const db = firebase.firestore();
+
+// ===== DATA LAYER LOCAL (Sincronizada) =====
+const STORAGE_KEY = 'nn_fluxo_obra_v4';
+let DB = {
+  user: { name: 'Neto Noronha', email: 'admin@nn.com', empresa: 'NN Soluções Integradas' },
+  obras: [], recebiveis: [], etapas: [], diario: [], custos: []
+};
+
+// Carrega os dados da Nuvem
+async function loadDB(){
+    try {
+        const collections = ['obras', 'recebiveis', 'etapas', 'diario', 'custos'];
+        for (const col of collections) {
+            const snapshot = await db.collection(col).get();
+            DB[col] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        }
+        
+        // Rotina de Migração Segura: Se a nuvem estiver vazia, mas você tem dados locais
+        const localData = localStorage.getItem(STORAGE_KEY);
+        if (localData && DB.obras.length === 0) {
+            const parsed = JSON.parse(localData);
+            if (parsed.obras && parsed.obras.length > 0) {
+                console.log("Migrando dados locais para o Firebase...");
+                const batch = db.batch();
+                parsed.obras.forEach(o => batch.set(db.collection('obras').doc(o.id.toString()), o));
+                parsed.recebiveis.forEach(r => batch.set(db.collection('recebiveis').doc(r.id.toString()), r));
+                parsed.etapas.forEach(e => batch.set(db.collection('etapas').doc(e.id.toString()), e));
+                parsed.diario.forEach(d => batch.set(db.collection('diario').doc(d.id.toString()), d));
+                parsed.custos.forEach(c => batch.set(db.collection('custos').doc(c.id.toString()), c));
+                await batch.commit();
+                alert("Seus dados foram migrados com sucesso para a Nuvem!");
+                // Recarrega pós migração
+                for (const col of collections) {
+                    const snap = await db.collection(col).get();
+                    DB[col] = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                }
+            }
+        }
+    } catch (e) {
+        console.error("Erro ao conectar com Firebase:", e);
+        alert("Aviso: Conexão com o banco de dados falhou. Verifique sua internet.");
+    } finally {
+        document.getElementById('cloudLoading').style.display = 'none';
+        if(loggedIn) navigate(currentPage);
+    }
+}
+
+let obrasViewMode = 'table'; 
+
+// ===== UTILS =====
+const fmtBRL=(v)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v||0);
+const fmtDate=(s)=>{if(!s)return'—';const d=new Date(s+'T12:00:00');return d.toLocaleDateString('pt-BR');};
+const today=()=>new Date().toISOString().split('T')[0];
+
+function statusLabel(s){
+  const m={planejamento:'Planejamento',em_andamento:'Em Andamento',pausada:'Pausada',concluida:'Concluída',pendente:'Pendente',recebido:'Recebido',vencido:'Vencido'};
+  return m[s]||s;
+}
+function statusColor(s){
+  const m={planejamento:'#f59e0b',em_andamento:'#3b82f6',pausada:'#f97316',concluida:'#10b981',pendente:'#f59e0b',recebido:'#10b981',vencido:'#ef4444'};
+  return m[s]||'#6b7280';
+}
+function statusBg(s){
+  const m={planejamento:'#fef3c7',em_andamento:'#dbeafe',pausada:'#ffedd5',concluida:'#d1fae5',pendente:'#fef3c7',recebido:'#d1fae5',vencido:'#fee2e2'};
+  return m[s]||'#f3f4f6';
+}
+function badge(s){return`<span class="badge" style="background:${statusBg(s)};color:${statusColor(s)}">${statusLabel(s)}</span>`;}
+
+// ===== AUTH =====
+let loggedIn = false;
+async function doLogin(){
+  const email=document.getElementById('loginEmail').value.trim();
+  const pass=document.getElementById('loginPassword').value.trim();
+  if((email===DB.user.email||email==='admin@nn.com')&&pass==='123456'){
+    loggedIn=true;
+    document.getElementById('loginPage').style.display='none';
+    document.getElementById('appShell').style.display='block';
+    document.getElementById('sidebarName').textContent=DB.user.name;
+    document.getElementById('sidebarAvatar').textContent=DB.user.name.charAt(0).toUpperCase();
+    
+    // Inicia a carga dos dados
+    document.getElementById('cloudLoading').style.display = 'flex';
+    await loadDB();
+    
+  } else {
+    document.getElementById('loginError').style.display='block';
+    document.getElementById('loginError').textContent='Credenciais inválidas. Tente admin@nn.com e 123456';
+  }
+}
+
+function doLogout(){
+  loggedIn=false;
+  document.getElementById('appShell').style.display='none';
+  document.getElementById('loginPage').style.display='flex';
+}
+
+// ===== ROUTER =====
+let currentPage='dashboard';
+let currentObraDetalheId=null;
+
+function navigate(page){
+  currentPage=page;
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
+  const pageTitles={dashboard:'Dashboard Tático',obras:'Controle de Obras',calendario:'Calendário de Obras',financeiro:'Financeiro — Recebíveis',diario:'Diário de Obra',configuracoes:'Configurações'};
+  
+  const navMap={dashboard:0,obras:1,calendario:2,financeiro:3,diario:4,configuracoes:5};
+  const items=document.querySelectorAll('.nav-item');
+  if(items[navMap[page]])items[navMap[page]].classList.add('active');
+  document.getElementById('pageTitle').textContent=pageTitles[page]||page;
+  
+  const ab=document.getElementById('headerActionBtn');
+  if(page === 'dashboard' || page === 'obras') {
+      ab.style.display='inline-flex';
+      ab.innerHTML=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Nova Obra`;
+      ab.setAttribute('onclick',"openObraModal(null)");
+  } else { ab.style.display='none'; }
+  
+  document.getElementById('alertCenter').innerHTML = '';
+
+  const renderers={dashboard:renderDashboard,obras:renderObras,calendario:renderCalendario,financeiro:renderFinanceiro,diario:renderDiario,configuracoes:renderConfiguracoes};
+  if(renderers[page])renderers[page]();
+  closeMobileSidebar();
+}
+
+// ===== DASHBOARD TÁTICO (COMMAND CENTER) =====
+function renderDashboard(){
+  const obrasAtivas = DB.obras.filter(o => o.status === 'em_andamento');
+  const countObrasAtivas = obrasAtivas.length;
+
+  const hojeObj = new Date();
+  hojeObj.setHours(0,0,0,0);
+  const hojeStr = today();
+
+  const recebiveisVencidos = DB.recebiveis.filter(r => r.status !== 'recebido' && r.data_prevista && new Date(r.data_prevista + 'T12:00:00') < hojeObj);
+  const countRecVencidos = recebiveisVencidos.length;
+  const valorRecVencidos = recebiveisVencidos.reduce((acc, r) => acc + (r.valor||0), 0);
+
+  const etapasAtrasadas = DB.etapas.filter(e => e.status !== 'concluida' && e.data_fim && new Date(e.data_fim + 'T12:00:00') < hojeObj);
+  const obrasComAtraso = new Set(etapasAtrasadas.map(e => e.obra_id)).size;
+
+  const diariosHoje = DB.diario.filter(d => d.data === hojeStr);
+  const obrasComDiarioHoje = new Set(diariosHoje.map(d => d.obra_id)).size;
+  const diariosPendentes = Math.max(0, countObrasAtivas - obrasComDiarioHoje);
+
+  const orcamentoTotal = obrasAtivas.reduce((a,o)=>a+(o.orcamento||0),0);
+  const valorMedidoTotal = obrasAtivas.reduce((a,o)=>a+(o.valor_medido||0),0);
+  const saldoDisponivel = orcamentoTotal - valorMedidoTotal;
+
+  const obrasEstouradas = DB.obras.filter(o => o.valor_medido > o.orcamento && o.orcamento > 0);
+  const alertasCriticos = countRecVencidos + obrasComAtraso + obrasEstouradas.length;
+
+  const hora = new Date().getHours();
+  let saudacao = 'Bom dia';
+  if(hora >= 12 && hora < 18) saudacao = 'Boa tarde';
+  else if(hora >= 18) saudacao = 'Boa noite';
+
+  const diaSemana = new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(hojeObj);
+  const diaFormatado = diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1);
+  const dataExtenso = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(hojeObj);
+
+  let alertasHTML = '';
+  obrasEstouradas.forEach(o => {
+      alertasHTML += `
+      <div style="background:#fee2e2; border-left:4px solid #ef4444; padding:12px 16px; border-radius:8px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+            <strong style="color:#b91c1c; font-size:14px;">⚠️ Alerta de Sangramento:</strong> 
+            <span style="color:#991b1b; font-size:13px;">A obra <b>${o.nome}</b> ultrapassou o contrato em ${fmtBRL(o.valor_medido - o.orcamento)}.</span>
+        </div>
+        <button onclick="navigate('obras')" style="background:#ef4444; color:#fff; border:none; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer;">Ver Detalhes</button>
+      </div>`;
+  });
+  document.getElementById('alertCenter').innerHTML = alertasHTML;
+
+  document.getElementById('pageContent').innerHTML = `
+    <div style="background:#fff; border-radius:12px; padding:24px; border:1px solid #e2e8f0; margin-top:16px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:16px; box-shadow:0 1px 3px rgba(0,0,0,.04);">
+        <div>
+            <div style="font-size:13px; color:#0d5c46; font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Command Center • ${diaFormatado}, ${dataExtenso}
+            </div>
+            <h1 style="font-size:28px; font-weight:800; color:#1e293b; margin:0 0 8px; letter-spacing:-0.5px;">${saudacao}, ${DB.user.name}</h1>
+            <p style="font-size:14px; color:#64748b; margin:0;">Você tem <strong>${countObrasAtivas} obras</strong> em execução, <strong style="color:${alertasCriticos > 0 ? '#ef4444' : '#64748b'}">${alertasCriticos} alertas críticos</strong> e <strong style="color:${diariosPendentes > 0 ? '#0d5c46' : '#64748b'}">${diariosPendentes} diários pendentes</strong> para hoje.</p>
+        </div>
+        <div style="display:flex; gap:12px;">
+            <button onclick="openDiarioModal(null)" class="btn-secondary" style="background:#f8fafc; border:1px solid #e2e8f0; color:#475569; padding:10px 18px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                Registrar Diário
+            </button>
+        </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px; margin-top:16px;">
+        <div class="kpi-card" style="padding:20px; display:flex; flex-direction:column; justify-content:space-between; min-height:140px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <span style="font-size:13px; font-weight:600; color:#64748b;">Saldo a Medir (Geral)</span>
+                <div style="width:28px; height:28px; border-radius:50%; background:#dcfce7; color:#0d5c46; display:flex; align-items:center; justify-content:center;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                </div>
+            </div>
+            <div>
+                <div style="font-size:26px; font-weight:800; color:#1e293b; letter-spacing:-0.5px; margin:8px 0;">${fmtBRL(saldoDisponivel)}</div>
+                <div style="font-size:12px; color:#64748b;">• <strong>${countObrasAtivas}</strong> obras ativas</div>
+            </div>
+        </div>
+
+        <div class="kpi-card" style="padding:20px; display:flex; flex-direction:column; justify-content:space-between; min-height:140px; cursor:pointer;" onclick="navigate('financeiro')">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <span style="font-size:13px; font-weight:600; color:#64748b;">Recebíveis Vencidos</span>
+                <div style="width:28px; height:28px; border-radius:50%; background:#fee2e2; color:#ef4444; display:flex; align-items:center; justify-content:center;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                </div>
+            </div>
+            <div>
+                <div style="font-size:26px; font-weight:800; color:${countRecVencidos > 0 ? '#ef4444' : '#1e293b'}; letter-spacing:-0.5px; margin:8px 0;">${countRecVencidos}</div>
+                <div style="font-size:12px; color:${countRecVencidos > 0 ? '#ef4444' : '#64748b'}; font-weight:500;">${fmtBRL(valorRecVencidos)} em atraso</div>
+            </div>
+        </div>
+
+        <div class="kpi-card" style="padding:20px; display:flex; flex-direction:column; justify-content:space-between; min-height:140px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <span style="font-size:13px; font-weight:600; color:#64748b;">Cronogramas Atrasados</span>
+                <div style="width:28px; height:28px; border-radius:50%; background:#fef3c7; color:#d97706; display:flex; align-items:center; justify-content:center;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+            </div>
+            <div>
+                <div style="font-size:26px; font-weight:800; color:${obrasComAtraso > 0 ? '#d97706' : '#1e293b'}; letter-spacing:-0.5px; margin:8px 0;">${obrasComAtraso}</div>
+                <div style="font-size:12px; color:#64748b;">obras com etapas em atraso</div>
+            </div>
+        </div>
+
+        <div class="kpi-card" style="padding:20px; display:flex; flex-direction:column; justify-content:space-between; min-height:140px; cursor:pointer;" onclick="navigate('diario')">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <span style="font-size:13px; font-weight:600; color:#64748b;">Diários Não Preenchidos</span>
+                <div style="width:28px; height:28px; border-radius:50%; background:#dcfce7; color:#0d5c46; display:flex; align-items:center; justify-content:center;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                </div>
+            </div>
+            <div>
+                <div style="font-size:26px; font-weight:800; color:${diariosPendentes > 0 ? '#0d5c46' : '#1e293b'}; letter-spacing:-0.5px; margin:8px 0;">${diariosPendentes}</div>
+                <div style="font-size:12px; color:#64748b;">de <strong>${countObrasAtivas}</strong> obras em execução hoje</div>
+            </div>
+        </div>
+    </div>
+  `;
+}
+
+// ===== OBRAS PAGE =====
+function renderObras(){
+  document.getElementById('alertCenter').innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; background:#fff; padding:16px; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.04); flex-wrap:wrap; gap:12px;">
+        <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+            <input type="text" id="filtroTexto" placeholder="🔍 Buscar obra..." class="form-input" style="width:250px; padding:7px 12px;" onkeyup="aplicarFiltrosObras()">
+            <select id="filtroStatus" class="form-input" style="width:160px; padding:7px 12px;" onchange="aplicarFiltrosObras()">
+                <option value="todos">Todos os Status</option>
+                <option value="em_andamento">Em Andamento</option>
+                <option value="concluida">Concluídas</option>
+                <option value="pausada">Pausadas</option>
+            </select>
+        </div>
+        <div style="display:flex; gap:8px;">
+            <button onclick="setObrasView('table')" class="btn-secondary" style="${obrasViewMode === 'table' ? 'background:#e2e8f0;' : ''}">📋 Tabela</button>
+            <button onclick="setObrasView('cards')" class="btn-secondary" style="${obrasViewMode === 'cards' ? 'background:#e2e8f0;' : ''}">🗂️ Cartões</button>
+        </div>
+    </div>
+  `;
+  renderObrasContent();
+}
+
+function setObrasView(mode) {
+    obrasViewMode = mode;
+    renderObras(); 
+    aplicarFiltrosObras(); 
+}
+
+function renderObrasContent(filteredObras = DB.obras) {
+    let contentHTML = '';
+
+    if(filteredObras.length === 0) {
+        contentHTML = `<div style="text-align:center;padding:48px;color:#94a3b8;"><p style="font-weight:600;">Nenhuma obra encontrada.</p></div>`;
+    } else if(obrasViewMode === 'table') {
+        const rows = filteredObras.map(o => {
+            const margem = o.orcamento - o.valor_medido;
+            const margemColor = margem < 0 ? '#ef4444' : '#1e293b';
+            return `
+            <tr class="table-row" style="border-bottom:1px solid #f1f5f9; cursor:pointer;" onclick="openObraDetalhe('${o.id}')">
+                <td style="padding:14px 16px;">
+                    <div style="font-weight:600;font-size:14px;color:#1e293b;">${o.nome}</div>
+                    <div style="font-size:12px;color:#94a3b8;">${o.contrato || 'S/ Contrato'}</div>
+                </td>
+                <td style="padding:14px 16px;font-size:13px;color:#475569;">${o.tipo_obra || '—'}</td>
+                <td style="padding:14px 16px;">${badge(o.status)}</td>
+                <td style="padding:14px 16px;font-size:13px;font-weight:600;">${fmtBRL(o.orcamento)}</td>
+                <td style="padding:14px 16px;font-size:13px;font-weight:600;color:#0d5c46;">${fmtBRL(o.valor_medido)}</td>
+                <td style="padding:14px 16px;min-width:120px;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                    <div class="progress-bar" style="flex:1;"><div class="progress-fill" style="width:${o.progresso||0}%"></div></div>
+                    <span style="font-size:12px;font-weight:600;color:#475569;">${o.progresso||0}%</span>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+
+        contentHTML = `
+        <div style="background:#fff; border-radius:12px; overflow:hidden; border:1px solid #f1f5f9; margin-top:16px;">
+            <div style="overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead style="background:#f8fafc; border-bottom:1px solid #f1f5f9;">
+                        <tr>
+                            <th style="padding:12px 16px;text-align:left;font-size:12px;color:#64748b;">Obra / Contrato</th>
+                            <th style="padding:12px 16px;text-align:left;font-size:12px;color:#64748b;">Tipo</th>
+                            <th style="padding:12px 16px;text-align:left;font-size:12px;color:#64748b;">Status</th>
+                            <th style="padding:12px 16px;text-align:left;font-size:12px;color:#64748b;">Orçado</th>
+                            <th style="padding:12px 16px;text-align:left;font-size:12px;color:#64748b;">Medido</th>
+                            <th style="padding:12px 16px;text-align:left;font-size:12px;color:#64748b;">Avanço Físico</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        </div>`;
+    } else {
+        const cards = filteredObras.map(o => {
+            return `
+            <div class="obra-card" onclick="openObraDetalhe('${o.id}')">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+                    <div>
+                        <div style="font-weight:700; font-size:16px; color:#1e293b; margin-bottom:2px;">${o.nome}</div>
+                        <div style="font-size:12px; color:#64748b;">Contrato: ${o.contrato || 'N/A'}</div>
+                    </div>
+                    <div>${badge(o.status)}</div>
+                </div>
+                <div style="background:#f8fafc; padding:10px; border-radius:8px; margin-bottom:12px; display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                    <div>
+                        <span style="font-size:11px; color:#94a3b8; display:block;">Orçado</span>
+                        <span style="font-size:13px; font-weight:600; color:#1e293b;">${fmtBRL(o.orcamento)}</span>
+                    </div>
+                    <div>
+                        <span style="font-size:11px; color:#94a3b8; display:block;">Medido</span>
+                        <span style="font-size:13px; font-weight:700; color:#0d5c46;">${fmtBRL(o.valor_medido)}</span>
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <div class="progress-bar" style="flex:1;"><div class="progress-fill" style="width:${o.progresso||0}%"></div></div>
+                    <span style="font-size:12px;font-weight:700;color:#0d5c46;">${o.progresso||0}%</span>
+                </div>
+            </div>`;
+        }).join('');
+        contentHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:16px; margin-top:16px;">${cards}</div>`;
+    }
+    document.getElementById('pageContent').innerHTML = contentHTML;
+}
+
+function aplicarFiltrosObras() {
+    if(document.getElementById('filtroTexto')) {
+        const txt = document.getElementById('filtroTexto').value.toLowerCase();
+        const status = document.getElementById('filtroStatus').value;
+        const tipo = document.getElementById('filtroTipo').value;
+
+        const filtradas = DB.obras.filter(o => {
+            const matchTxt = o.nome.toLowerCase().includes(txt) || (o.cliente||'').toLowerCase().includes(txt) || (o.contrato||'').toLowerCase().includes(txt);
+            const matchStatus = status === 'todos' || o.status === status;
+            const matchTipo = tipo === 'todos' || o.tipo_obra === tipo;
+            return matchTxt && matchStatus && matchTipo;
+        });
+        renderObrasContent(filtradas);
+    }
+}
+
+// ===== CRUD OBRA =====
+function openObraModal(id){
+  const modal=document.getElementById('obraModal');
+  document.getElementById('obraModalTitle').textContent=id?'Editar Operação':'Nova Operação';
+  if(id){
+    const o=DB.obras.find(x=>String(x.id)===String(id));
+    document.getElementById('obraId').value=o.id;
+    document.getElementById('obraNome').value=o.nome||'';
+    document.getElementById('obraCliente').value=o.cliente||'';
+    document.getElementById('obraContrato').value=o.contrato||'';
+    document.getElementById('obraTipo').value=o.tipo_obra||'Residencial';
+    document.getElementById('obraLocal').value=o.local||'';
+    document.getElementById('obraResponsavel').value=o.responsavel||'';
+    document.getElementById('obraStatus').value=o.status||'em_andamento';
+    document.getElementById('obraDataInicio').value=o.data_inicio||'';
+    document.getElementById('obraDataPrevisao').value=o.data_previsao||'';
+    document.getElementById('obraOrcamento').value=o.orcamento||'';
+    document.getElementById('obraValorMedido').value=o.valor_medido||'';
+    document.getElementById('obraProgresso').value=o.progresso||'';
+    document.getElementById('obraDescricao').value=o.descricao||'';
+  } else {
+    document.getElementById('obraId').value='';
+    document.getElementById('obraNome').value='';
+    document.getElementById('obraCliente').value='';
+    document.getElementById('obraContrato').value='';
+    document.getElementById('obraTipo').value='Residencial';
+    document.getElementById('obraLocal').value='';
+    document.getElementById('obraResponsavel').value=DB.user.name;
+    document.getElementById('obraStatus').value='em_andamento';
+    document.getElementById('obraDataInicio').value=today();
+    document.getElementById('obraDataPrevisao').value='';
+    document.getElementById('obraOrcamento').value='';
+    document.getElementById('obraValorMedido').value='';
+    document.getElementById('obraProgresso').value='0';
+    document.getElementById('obraDescricao').value='';
+  }
+  modal.classList.add('active');
+}
+
+async function saveObra(){
+  const nome=document.getElementById('obraNome').value.trim();
+  if(!nome){alert('Informe o nome da frente de serviço.');return;}
+  const id=document.getElementById('obraId').value;
+  const obj={
+    nome,
+    cliente:document.getElementById('obraCliente').value.trim(),
+    contrato:document.getElementById('obraContrato').value.trim(),
+    tipo_obra:document.getElementById('obraTipo').value,
+    local:document.getElementById('obraLocal').value.trim(),
+    responsavel:document.getElementById('obraResponsavel').value.trim(),
+    status:document.getElementById('obraStatus').value,
+    data_inicio:document.getElementById('obraDataInicio').value,
+    data_previsao:document.getElementById('obraDataPrevisao').value,
+    orcamento:parseFloat(document.getElementById('obraOrcamento').value)||0,
+    valor_medido:parseFloat(document.getElementById('obraValorMedido').value)||0,
+    progresso:parseInt(document.getElementById('obraProgresso').value)||0,
+    descricao:document.getElementById('obraDescricao').value.trim(),
+  };
+  
+  try {
+      if(id){
+        await db.collection('obras').doc(id).update(obj);
+      } else {
+        await db.collection('obras').add(obj);
+      }
+      await loadDB();
+      closeModal('obraModal');
+      if(currentObraDetalheId) openObraDetalhe(currentObraDetalheId);
+      else navigate(currentPage); 
+  } catch (error) {
+      console.error("Erro ao salvar obra: ", error);
+      alert("Erro ao salvar no banco de dados.");
+  }
+}
+
+// ===== DETALHE OBRA =====
+let currentDetalheTab='etapas';
+
+function openObraDetalhe(id){
+  currentObraDetalheId=id;
+  const o=DB.obras.find(x=>String(x.id)===String(id));
+  if(!o)return;
+  document.getElementById('detalheNome').textContent=o.nome;
+  document.getElementById('detalheLocal').innerHTML=`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ${o.local||'Local não informado'}`;
+  document.getElementById('detalheStatusBadge').innerHTML=badge(o.status);
+  const p=o.progresso||0;
+  document.getElementById('detalheProgresso').textContent=p+'%';
+  document.getElementById('detalheProgressoBar').style.width=p+'%';
+  
+  document.getElementById('obraDetalheOverlay').style.display='block';
+  document.body.style.overflow='hidden';
+  currentDetalheTab='etapas';
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',i===0));
+  renderDetalheTab('etapas');
+}
+
+function closeObraDetalhe(){
+  document.getElementById('obraDetalheOverlay').style.display='none';
+  document.body.style.overflow='';
+  currentObraDetalheId=null;
+  navigate(currentPage);
+}
+
+function editObraFromDetalhe(){ openObraModal(currentObraDetalheId); }
+
+function setDetalheTab(btn,tab){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  currentDetalheTab=tab;
+  renderDetalheTab(tab);
+}
+
+function renderDetalheTab(tab){
+  const id=currentObraDetalheId;
+  const el=document.getElementById('detalheContent');
+  if(tab==='etapas'){
+    const etapas=DB.etapas.filter(e=>String(e.obra_id)===String(id));
+    el.innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h3 style="font-size:15px;font-weight:700;color:#1e293b;margin:0;">Etapas da Obra</h3>
+        <button class="btn-primary" onclick="openEtapaModal(null,'${id}')">Nova Etapa</button>
+      </div>
+      <div style="display:grid;gap:10px;">
+        ${etapas.map(e=>`
+          <div style="background:#fff;border:1px solid #f1f5f9;border-radius:10px;padding:14px 16px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+              <div><div style="font-weight:600;font-size:14px;color:#1e293b;">${e.nome}</div></div>
+              <div style="display:flex;align-items:center;gap:8px;">${badge(e.status)}<button onclick="deleteEtapa('${e.id}')" style="background:#fee2e2;border:none;cursor:pointer;color:#ef4444;padding:4px 6px;border-radius:6px;font-size:11px;">✕</button></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;"><div class="progress-bar" style="flex:1;"><div class="progress-fill" style="width:${e.progresso||0}%"></div></div><span style="font-size:12px;font-weight:600;color:#475569;min-width:28px;">${e.progresso||0}%</span></div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } else if(tab==='diario'){
+    const registros=[...DB.diario].filter(d=>String(d.obra_id)===String(id)).sort((a,b)=>b.data.localeCompare(a.data));
+    const tempoEmoji={ensolarado:'☀️',nublado:'☁️',chuvoso:'🌧️',frio:'❄️',vento_forte:'💨'};
+    el.innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h3 style="font-size:15px;font-weight:700;color:#1e293b;margin:0;">Diário de Obra</h3>
+        <button class="btn-primary" onclick="openDiarioModalForObra('${id}')">Novo Registro</button>
+      </div>
+      <div style="display:grid;gap:10px;">
+        ${registros.map(d=>{
+            const fotosHtml = (d.fotos && d.fotos.length > 0) ? `<div style="margin-top:12px; display:flex; gap:8px; overflow-x:auto;">${d.fotos.map(f => `<img src="${f}" style="height:60px; width:60px; object-fit:cover; border-radius:6px; border:1px solid #e2e8f0;">`).join('')}</div>` : '';
+            return `
+          <div style="background:#fff;border:1px solid #f1f5f9;border-radius:10px;padding:14px 16px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:18px;">${tempoEmoji[d.condicao_tempo]||'☀️'}</span>
+                <div>
+                  <div style="font-weight:600;font-size:14px;color:#1e293b;">${fmtDate(d.data)} <span style="font-size:12px; color:#64748b; font-weight:400;">(${d.hora_inicio || '--:--'} às ${d.hora_fim || '--:--'})</span></div>
+                </div>
+              </div>
+              <button onclick="deleteDiario('${d.id}')" style="background:#fee2e2;border:none;cursor:pointer;color:#ef4444;padding:4px 6px;border-radius:6px;font-size:11px;">✕</button>
+            </div>
+            <div style="font-size:12px; color:#475569; margin-bottom:8px;"><strong>Equipe:</strong> ${d.equipe || 'Não informada'}</div>
+            <div style="font-size:13px;color:#1e293b;margin-bottom:${d.ocorrencias?'8px':'0'}">${d.servicos_executados}</div>
+            ${d.ocorrencias?`<div style="font-size:12px;color:#f59e0b;background:#fef3c7;padding:6px 10px;border-radius:6px;">⚠️ ${d.ocorrencias}</div>`:''}
+            ${fotosHtml}
+          </div>`
+        }).join('')}
+      </div>
+    `;
+  } else if(tab==='custos'){
+    const custos=DB.custos.filter(c=>String(c.obra_id)===String(id));
+    el.innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <button class="btn-primary" onclick="openCustoModalForObra('${id}')">Novo Custo</button>
+      </div>
+      <div style="display:grid;gap:8px;">
+        ${custos.map(c=>`
+          <div style="background:#fff;border:1px solid #f1f5f9;border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:12px;">
+            <div style="flex:1;">
+              <div style="font-weight:600;font-size:14px;color:#1e293b;">${c.descricao}</div>
+            </div>
+            <div style="font-weight:700;font-size:14px;color:#ef4444;">${fmtBRL(c.valor)}</div>
+            <button onclick="deleteCusto('${c.id}')" style="background:#fee2e2;border:none;cursor:pointer;color:#ef4444;padding:4px 6px;border-radius:6px;font-size:11px;">✕</button>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } else if(tab==='recebiveis'){
+    const recebíveis=DB.recebiveis.filter(r=>String(r.obra_id)===String(id));
+    el.innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <button class="btn-primary" onclick="openRecebivelModalForObra('${id}')">Novo Recebível</button>
+      </div>
+      <div style="display:grid;gap:8px;">
+        ${recebíveis.map(r=>`
+          <div style="background:#fff;border:1px solid #f1f5f9;border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:12px;">
+            <div style="flex:1;">
+              <div style="font-weight:600;font-size:14px;color:#1e293b;">${r.descricao}</div>
+              <div style="font-size:12px;color:#94a3b8;">Previsto: ${fmtDate(r.data_prevista)}</div>
+            </div>
+            <div style="font-weight:700;font-size:14px;color:#1e293b;">${fmtBRL(r.valor)}</div>
+            ${badge(r.status)}
+            <div style="display:flex;gap:4px;">
+              ${r.status!=='recebido'?`<button onclick="marcarRecebido('${r.id}')" style="background:#d1fae5;border:none;cursor:pointer;color:#10b981;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:600;">✓ Recebido</button>`:''}
+              <button onclick="deleteRecebivel('${r.id}')" style="background:#fee2e2;border:none;cursor:pointer;color:#ef4444;padding:4px 6px;border-radius:6px;font-size:11px;">✕</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+}
+
+// ===== DIARIO CRUD =====
+function openDiarioModal(id){
+  const sel=document.getElementById('diarioObra');
+  sel.innerHTML=DB.obras.map(o=>`<option value="${o.id}">${o.nome}</option>`).join('');
+  document.getElementById('diarioId').value=id||'';
+  document.getElementById('diarioFotos').value=''; 
+  
+  if(id){
+    const d=DB.diario.find(x=>String(x.id)===String(id));
+    sel.value=d.obra_id;
+    document.getElementById('diarioData').value=d.data||today();
+    document.getElementById('diarioHoraInicio').value=d.hora_inicio||'';
+    document.getElementById('diarioHoraFim').value=d.hora_fim||'';
+    document.getElementById('diarioEquipe').value=d.equipe||'';
+    document.getElementById('diarioTempo').value=d.condicao_tempo||'ensolarado';
+    document.getElementById('diarioTipoServico').value=d.tipo_servico||'outros';
+    document.getElementById('diarioServicos').value=d.servicos_executados||'';
+    document.getElementById('diarioOcorrencias').value=d.ocorrencias||'';
+  } else {
+    document.getElementById('diarioData').value=today();
+    document.getElementById('diarioHoraInicio').value='';
+    document.getElementById('diarioHoraFim').value='';
+    document.getElementById('diarioEquipe').value='';
+    document.getElementById('diarioTempo').value='ensolarado';
+    document.getElementById('diarioTipoServico').value='outros';
+    document.getElementById('diarioServicos').value='';
+    document.getElementById('diarioOcorrencias').value='';
+  }
+  document.getElementById('diarioModal').classList.add('active');
+}
+
+function openDiarioModalForObra(obraId){
+  openDiarioModal(null);
+  document.getElementById('diarioObra').value=obraId;
+}
+
+const fileToBase64 = file => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = error => reject(error);
+});
+
+async function saveDiario(){
+  const servicos=document.getElementById('diarioServicos').value.trim();
+  const obra_id=document.getElementById('diarioObra').value;
+  const data=document.getElementById('diarioData').value;
+  if(!obra_id || !data || !servicos){ alert('Preencha os campos obrigatórios: Obra, Data e Serviços Executados.'); return; }
+  
+  const id=document.getElementById('diarioId').value;
+  
+  const fileInput = document.getElementById('diarioFotos');
+  let fotosArray = [];
+  if(fileInput.files.length > 0) {
+      for(let i=0; i < fileInput.files.length; i++){
+          try { const b64 = await fileToBase64(fileInput.files[i]); fotosArray.push(b64); } 
+          catch(e) { console.error("Erro foto", e); }
+      }
+  }
+
+  const obj={
+    obra_id:obra_id,
+    data:data,
+    hora_inicio:document.getElementById('diarioHoraInicio').value,
+    hora_fim:document.getElementById('diarioHoraFim').value,
+    equipe:document.getElementById('diarioEquipe').value.trim(),
+    condicao_tempo:document.getElementById('diarioTempo').value,
+    tipo_servico:document.getElementById('diarioTipoServico').value,
+    servicos_executados:servicos,
+    ocorrencias:document.getElementById('diarioOcorrencias').value.trim(),
+  };
+
+  if(id){
+      const idx=DB.diario.findIndex(x=>String(x.id)===String(id));
+      if(fotosArray.length > 0) obj.fotos = fotosArray; 
+      else if(idx>=0) obj.fotos = DB.diario[idx].fotos || []; 
+      await db.collection('diario').doc(id).update(obj);
+  } else {
+      obj.fotos = fotosArray;
+      await db.collection('diario').add(obj);
+  }
+  
+  await loadDB();
+  closeModal('diarioModal');
+  if(currentObraDetalheId) renderDetalheTab('diario');
+  else navigate(currentPage);
+}
+
+async function deleteDiario(id){
+  if(!confirm('Excluir este registro permanentemente?'))return;
+  await db.collection('diario').doc(id).delete();
+  await loadDB();
+  if(currentObraDetalheId) renderDetalheTab('diario');
+  else navigate(currentPage);
+}
+
+function renderDiario(){
+  const registros=[...DB.diario].sort((a,b)=>b.data.localeCompare(a.data));
+  const tempoEmoji={ensolarado:'☀️',nublado:'☁️',chuvoso:'🌧️',frio:'❄️',vento_forte:'💨'};
+  const tipoFormatado={fundacao:'Fundação',alvenaria:'Alvenaria',estrutura:'Estrutura',cobertura:'Cobertura',instalacoes_eletricas:'Elétrica',instalacoes_hidraulicas:'Hidráulica',revestimento:'Revestimento',pintura:'Pintura',acabamento:'Acabamento',demolicao:'Demolição',terraplenagem:'Terraplenagem',outros:'Outros'};
+
+  document.getElementById('pageContent').innerHTML=`
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h2 style="font-size:18px; font-weight:700; color:#1e293b;">Diário de Obra</h2>
+        <button class="btn-primary" onclick="openDiarioModal(null)">Novo Registro</button>
+    </div>
+    <div style="display:grid;gap:12px;">
+      ${registros.map(d=>{
+        const obra=DB.obras.find(o=>String(o.id)===String(d.obra_id));
+        const fotosHtml = (d.fotos && d.fotos.length > 0) ? `<div style="margin-top:12px; display:flex; gap:8px; overflow-x:auto;">${d.fotos.map(f => `<img src="${f}" style="height:60px; width:60px; object-fit:cover; border-radius:6px; border:1px solid #e2e8f0;">`).join('')}</div>` : '';
+        return`<div style="background:#fff;border-radius:12px;border:1px solid #f1f5f9;padding:18px 20px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="font-size:28px;">${tempoEmoji[d.condicao_tempo]||'☀️'}</div>
+              <div>
+                <div style="font-weight:700;font-size:15px;color:#1e293b;">${fmtDate(d.data)} <span style="font-size:12px; color:#64748b;">(${d.hora_inicio || '--:--'} às ${d.hora_fim || '--:--'})</span></div>
+                <div style="font-size:13px;color:#0d5c46;font-weight:600;">${obra?obra.nome:'Obra deletada'}</div>
+              </div>
+            </div>
+            <button onclick="deleteDiario('${d.id}')" class="btn-danger">Excluir</button>
+          </div>
+          <div style="display:flex; gap:12px; margin-bottom:12px; flex-wrap:wrap;">
+            <div style="font-size:12px; background:#f1f5f9; padding:4px 8px; border-radius:4px; color:#475569;"><strong>Equipe:</strong> ${d.equipe || 'Não informada'}</div>
+            <div style="font-size:12px; background:#f1f5f9; padding:4px 8px; border-radius:4px; color:#475569;"><strong>Serviço:</strong> ${tipoFormatado[d.tipo_servico] || d.tipo_servico}</div>
+          </div>
+          <div style="background:#f8fafc;border-radius:8px;padding:12px;">
+            <div style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:4px;">SERVIÇOS EXECUTADOS</div>
+            <div style="font-size:14px;color:#1e293b;">${d.servicos_executados}</div>
+          </div>
+          ${fotosHtml}
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+// ===== ETAPAS CRUD =====
+function openEtapaModal(id,obraId){
+  document.getElementById('etapaObraId').value=obraId||currentObraDetalheId;
+  document.getElementById('etapaId').value=id||'';
+  if(id){
+    const e=DB.etapas.find(x=>String(x.id)===String(id));
+    document.getElementById('etapaNome').value=e.nome||'';
+    document.getElementById('etapaInicio').value=e.data_inicio||'';
+    document.getElementById('etapaFim').value=e.data_fim||'';
+    document.getElementById('etapaStatus').value=e.status||'pendente';
+    document.getElementById('etapaProgresso').value=e.progresso||0;
+  } else {
+    document.getElementById('etapaNome').value='';
+    document.getElementById('etapaInicio').value=today();
+    document.getElementById('etapaFim').value='';
+    document.getElementById('etapaStatus').value='pendente';
+    document.getElementById('etapaProgresso').value='0';
+  }
+  document.getElementById('etapaModal').classList.add('active');
+}
+async function saveEtapa(){
+  const nome=document.getElementById('etapaNome').value.trim();
+  const id=document.getElementById('etapaId').value;
+  const obj={
+    nome,obra_id:document.getElementById('etapaObraId').value,
+    data_inicio:document.getElementById('etapaInicio').value,
+    data_fim:document.getElementById('etapaFim').value,
+    status:document.getElementById('etapaStatus').value,
+    progresso:parseInt(document.getElementById('etapaProgresso').value)||0,
+  };
+  if(id) await db.collection('etapas').doc(id).update(obj);
+  else await db.collection('etapas').add(obj);
+  await loadDB();
+  closeModal('etapaModal');
+  renderDetalheTab('etapas');
+}
+async function deleteEtapa(id){
+  if(!confirm('Excluir esta etapa?'))return;
+  await db.collection('etapas').doc(id).delete();
+  await loadDB();
+  renderDetalheTab('etapas');
+}
+
+// ===== CUSTO CRUD =====
+function openCustoModal(id){
+  const sel=document.getElementById('custoObra');
+  sel.innerHTML=DB.obras.map(o=>`<option value="${o.id}">${o.nome}</option>`).join('');
+  document.getElementById('custoId').value=id||'';
+  document.getElementById('custoModal').classList.add('active');
+}
+function openCustoModalForObra(obraId){
+  openCustoModal(null);
+  document.getElementById('custoObra').value=obraId;
+}
+async function saveCusto(){
+  const obj={
+    obra_id:document.getElementById('custoObra').value,
+    descricao:document.getElementById('custoDescricao').value.trim(),
+    valor:parseFloat(document.getElementById('custoValor').value)||0,
+    data:document.getElementById('custoData').value,
+    categoria:document.getElementById('custoCategoria').value,
+  };
+  const id = document.getElementById('custoId').value;
+  if(id) await db.collection('custos').doc(id).update(obj);
+  else await db.collection('custos').add(obj);
+  await loadDB();
+  closeModal('custoModal');
+  if(currentObraDetalheId)renderDetalheTab('custos');
+}
+async function deleteCusto(id){
+  await db.collection('custos').doc(id).delete();
+  await loadDB();
+  if(currentObraDetalheId)renderDetalheTab('custos');
+}
+
+// ===== RECEBIVEL CRUD =====
+function openRecebivelModal(id){
+  const sel=document.getElementById('recebivelObra');
+  sel.innerHTML='<option value="">Sem obra vinculada</option>'+DB.obras.map(o=>`<option value="${o.id}">${o.nome}</option>`).join('');
+  document.getElementById('recebivelId').value=id||'';
+  if(id){
+    const r=DB.recebiveis.find(x=>String(x.id)===String(id));
+    sel.value=r.obra_id||'';
+    document.getElementById('recebivelDescricao').value=r.descricao||'';
+    document.getElementById('recebivelValor').value=r.valor||'';
+    document.getElementById('recebivelData').value=r.data_prevista||'';
+    document.getElementById('recebivelStatus').value=r.status||'pendente';
+  } else {
+      document.getElementById('recebivelDescricao').value='';
+      document.getElementById('recebivelValor').value='';
+      document.getElementById('recebivelData').value='';
+  }
+  document.getElementById('recebivelModal').classList.add('active');
+}
+function openRecebivelModalForObra(obraId){
+  openRecebivelModal(null);
+  document.getElementById('recebivelObra').value=obraId;
+}
+async function saveRecebivel(){
+  const id=document.getElementById('recebivelId').value;
+  const obj={
+    descricao:document.getElementById('recebivelDescricao').value.trim(),
+    obra_id:document.getElementById('recebivelObra').value || null,
+    valor:parseFloat(document.getElementById('recebivelValor').value)||0,
+    data_prevista:document.getElementById('recebivelData').value,
+    status:document.getElementById('recebivelStatus').value,
+  };
+  if(id) await db.collection('recebiveis').doc(id).update(obj);
+  else await db.collection('recebiveis').add(obj);
+  await loadDB();
+  closeModal('recebivelModal');
+  if(currentObraDetalheId)renderDetalheTab('recebiveis');
+  else navigate(currentPage);
+}
+async function marcarRecebido(id){
+  await db.collection('recebiveis').doc(id).update({status:'recebido'});
+  await loadDB();
+  if(currentObraDetalheId)renderDetalheTab('recebiveis');
+  else navigate(currentPage);
+}
+async function deleteRecebivel(id){
+  await db.collection('recebiveis').doc(id).delete();
+  await loadDB();
+  if(currentObraDetalheId)renderDetalheTab('recebiveis');
+  else navigate(currentPage);
+}
+
+// ===== CALENDARIO =====
+let calAno=new Date().getFullYear(),calMes=new Date().getMonth();
+function renderCalendario(){
+  const hoje=new Date();
+  const primeiroDia=new Date(calAno,calMes,1).getDay();
+  const totalDias=new Date(calAno,calMes+1,0).getDate();
+  const eventos={};
+  const add=(dia,ev)=>{if(!eventos[dia])eventos[dia]=[];eventos[dia].push(ev);};
+  DB.obras.forEach(o=>{
+    if(o.data_inicio){const d=new Date(o.data_inicio+'T12:00:00');if(d.getFullYear()===calAno&&d.getMonth()===calMes)add(d.getDate(),{color:'#3b82f6',label:'▶ '+o.nome.split(' ').slice(0,3).join(' ')});}
+    if(o.data_previsao){const d=new Date(o.data_previsao+'T12:00:00');if(d.getFullYear()===calAno&&d.getMonth()===calMes)add(d.getDate(),{color:'#10b981',label:'✓ '+o.nome.split(' ').slice(0,3).join(' ')});}
+  });
+  DB.recebiveis.forEach(r=>{
+    if(r.data_prevista){
+      const d=new Date(r.data_prevista+'T12:00:00');
+      if(d.getFullYear()===calAno&&d.getMonth()===calMes){
+        const vencido=r.status!=='recebido'&&d<new Date();
+        add(d.getDate(),{color:r.status==='recebido'?'#10b981':vencido?'#ef4444':'#f59e0b',label:'$ '+r.descricao.substring(0,20)});
+      }
+    }
+  });
+  const cells=[];
+  for(let i=0;i<primeiroDia;i++)cells.push(null);
+  for(let d=1;d<=totalDias;d++)cells.push(d);
+  while(cells.length%7!==0)cells.push(null);
+
+  const MESES_N=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const DIAS_N=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+
+  document.getElementById('pageContent').innerHTML=`
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;font-size:12px;">
+      ${[['#3b82f6','Início de Obra'],['#10b981','Entrega / Previsão'],['#f59e0b','Recebível Pendente'],['#ef4444','Recebível Vencido']].map(([c,l])=>`<div style="display:flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;background:${c};border-radius:50%;display:inline-block;"></span><span style="color:#64748b;">${l}</span></div>`).join('')}
+    </div>
+    <div style="background:#fff;border-radius:12px;border:1px solid #f1f5f9;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.04);">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #f1f5f9;">
+        <button onclick="navMes(-1)" style="background:#f1f5f9;border:none;cursor:padding:6px 10px;border-radius:8px;font-size:16px;">‹</button>
+        <h2 style="font-size:16px;font-weight:700;color:#1e293b;">${MESES_N[calMes]} ${calAno}</h2>
+        <button onclick="navMes(1)" style="background:#f1f5f9;border:none;cursor:padding:6px 10px;border-radius:8px;font-size:16px;">›</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);">
+        ${DIAS_N.map(d=>`<div style="text-align:center;padding:8px;font-size:12px;font-weight:600;color:#64748b;border-bottom:1px solid #f1f5f9;">${d}</div>`).join('')}
+        ${cells.map(dia=>{
+          const isHoje=dia&&dia===hoje.getDate()&&calMes===hoje.getMonth()&&calAno===hoje.getFullYear();
+          const evs=dia?eventos[dia]||[]:[];
+          return`<div style="min-height:80px;border-bottom:1px solid #f8fafc;border-right:1px solid #f8fafc;padding:6px;${!dia?'background:#f8fafc;':''}${isHoje?'background:#fff7ed;':''}" >
+            ${dia?`<div style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;margin-bottom:2px;${isHoje?'background:#0d5c46;color:#fff;':'color:#475569;'}">${dia}</div>`:''}
+            ${evs.slice(0,3).map(ev=>`<div style="background:${ev.color};color:#fff;font-size:9px;padding:2px 4px;border-radius:3px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${ev.label}</div>`).join('')}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+function navMes(d){ calMes+=d; if(calMes<0){calMes=11;calAno--;} if(calMes>11){calMes=0;calAno++;} renderCalendario(); }
+
+// ===== FINANCEIRO =====
+function renderFinanceiro(){
+  const recebíveis=DB.recebiveis;
+  const hoje=new Date();hoje.setHours(0,0,0,0);
+  const totalR=recebíveis.filter(r=>r.status==='recebido').reduce((a,r)=>a+(r.valor||0),0);
+  const totalP=recebíveis.filter(r=>r.status==='pendente').reduce((a,r)=>a+(r.valor||0),0);
+  const rows=recebíveis.sort((a,b)=>a.data_prevista?.localeCompare(b.data_prevista)).map(r=>{
+    const obra=DB.obras.find(o=>String(o.id)===String(r.obra_id));
+    const d=r.data_prevista?new Date(r.data_prevista+'T12:00:00'):null;
+    const vencido=d&&r.status!=='recebido'&&d<hoje;
+    return`<tr class="table-row" style="border-bottom:1px solid #f1f5f9;">
+      <td style="padding:13px 16px;">
+        <div style="font-weight:600;font-size:14px;color:#1e293b;">${r.descricao}</div>
+        <div style="font-size:12px;color:#94a3b8;">${obra?obra.nome:'Sem obra'}</div>
+      </td>
+      <td style="padding:13px 16px;font-size:14px;font-weight:600;color:#1e293b;">${fmtBRL(r.valor)}</td>
+      <td style="padding:13px 16px;font-size:13px;color:${vencido?'#ef4444':'#475569'};">${fmtDate(r.data_prevista)}${vencido?' ⚠️':''}</td>
+      <td style="padding:13px 16px;">${badge(vencido?'vencido':r.status)}</td>
+      <td style="padding:13px 16px;">
+        <div style="display:flex;gap:6px;">
+          ${r.status!=='recebido'?`<button onclick="marcarRecebido('${r.id}')" style="background:#d1fae5;border:none;cursor:pointer;color:#10b981;padding:5px 8px;border-radius:6px;font-size:12px;font-weight:600;">✓</button>`:''}
+          <button onclick="openRecebivelModal('${r.id}')" style="background:#dbeafe;border:none;color:#3b82f6;padding:5px;border-radius:6px;">✏️</button>
+          <button onclick="deleteRecebivel('${r.id}')" style="background:#fee2e2;border:none;color:#ef4444;padding:5px;border-radius:6px;">✕</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('pageContent').innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:24px;">
+      <div class="kpi-card"><div style="font-size:12px;color:#64748b;margin-bottom:10px;">✓ Recebido</div><div style="font-size:22px;font-weight:700;color:#10b981;">${fmtBRL(totalR)}</div></div>
+      <div class="kpi-card"><div style="font-size:12px;color:#64748b;margin-bottom:10px;">⏳ A Receber</div><div style="font-size:22px;font-weight:700;color:#f59e0b;">${fmtBRL(totalP)}</div></div>
+    </div>
+    <div style="background:#fff;border-radius:12px;border:1px solid #f1f5f9;overflow:hidden;">
+      <div style="padding:16px 20px;border-bottom:1px solid #f1f5f9;"><h3 style="font-size:15px;font-weight:700;margin:0;">Recebíveis</h3></div>
+      <table style="width:100%;border-collapse:collapse;"><tbody>${rows}</tbody></table>
+    </div>
+  `;
+}
+
+// ===== CONFIGURACOES =====
+function renderConfiguracoes(){
+  document.getElementById('pageContent').innerHTML=`
+    <div style="max-width:600px;margin:0 auto;">
+      <div style="background:#fff;border-radius:12px;padding:24px;margin-bottom:16px;">
+        <h3 style="font-size:15px;font-weight:700;margin:0 0 20px;">Perfil do Usuário</h3>
+        <div style="display:grid;gap:14px;">
+          <div><label class="form-label">Nome Completo</label><input id="cfgNome" class="form-input" type="text" value="${DB.user.name}"></div>
+          <button class="btn-primary" onclick="saveConfiguracoes()" style="width:fit-content;">Salvar Alterações</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+function saveConfiguracoes(){
+  DB.user.name=document.getElementById('cfgNome').value.trim()||DB.user.name;
+  document.getElementById('sidebarName').textContent=DB.user.name;
+  document.getElementById('sidebarAvatar').textContent=DB.user.name.charAt(0).toUpperCase();
+  alert('Configurações salvas!');
+}
+
+// ===== UTILS MENUS =====
+function closeModal(id){ document.getElementById(id).classList.remove('active'); }
+document.querySelectorAll('.modal-overlay').forEach(m=>{ m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('active');}); });
+function closeMobileSidebar(){ document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebarOverlay').classList.remove('active'); }
+
+// Verifica se já estava logado antes (sessão)
+if (localStorage.getItem('nn_logged_in') === 'true') {
+    loggedIn = true;
+    document.getElementById('loginPage').style.display='none';
+    document.getElementById('appShell').style.display='block';
+    updateHeaderDate();
+    document.getElementById('cloudLoading').style.display = 'flex';
+    loadDB();
+} else {
+    document.getElementById('loginPage').style.display='flex';
+    document.getElementById('appShell').style.display='none';
+    document.getElementById('cloudLoading').style.display = 'none';
+}
+</script>
+</body>
+</html>
